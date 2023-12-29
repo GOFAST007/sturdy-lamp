@@ -1,0 +1,6 @@
+applications:
+    aws-integrator:
+        charm: ch:aws-integrator
+        num_units: 1
+        options:
+          trust: true

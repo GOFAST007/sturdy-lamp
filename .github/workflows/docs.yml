@@ -1,0 +1,67 @@
+name: "Docs"
+on:
+  push:
+    branches:
+      - '3.3'
+  pull_request:
+    branches:
+      - '3.3'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: Sync to Discourse
+    runs-on: [self-hosted, linux, arm64, aws, large]
+    env:
+      TOPIC_IDS: './.github/discourse-topic-ids.yaml'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build Juju client
+        run: |
+          go install -v ./cmd/juju
+
+      - name: Generate CLI docs
+        id: gen
+        shell: bash
+        run: |
+          # Create temp dir to hold docs
+          DOCS_DIR=$(mktemp -d)
+          echo "dir=${DOCS_DIR}" >> $GITHUB_OUTPUT
+          juju documentation --split --out=$DOCS_DIR --discourse-ids $TOPIC_IDS
+        # TODO: save $DOCS_DIR as an artifact
+
+      - name: Generate controller config keys doc
+        env:
+          DOCS_DIR: ${{ steps.gen.outputs.dir }}
+          JUJU_SRC_ROOT: '.'
+        run: |
+          go run ./scripts/md-gen/controller-config
+
+      - name: pip install requirements
+        run: |
+          python3 -m pip install -r ./scripts/discourse-sync/requirements.txt
+
+      - name: Check docs on Discourse
+        if: github.event_name == 'pull_request'
+        env:
+          DOCS_DIR: ${{ steps.gen.outputs.dir }}
+        run: |
+          python3 ./scripts/discourse-sync/main.py check
+
+      - name: Sync docs to Discourse
+        if: github.event_name == 'push'
+        env:
+          DISCOURSE_API_USERNAME: ${{ secrets.DISCOURSE_API_USERNAME }}
+          DISCOURSE_API_KEY: ${{ secrets.DISCOURSE_API_KEY }}
+          DOCS_DIR: ${{ steps.gen.outputs.dir }}
+        run: |
+          python3 ./scripts/discourse-sync/main.py sync

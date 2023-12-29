@@ -1,0 +1,10 @@
+name: cockroachdb
+summary: cockroachdb
+maintainers: ["Harry Pidcock <harry.pidcock@canonical.com>"]
+description: cockroachdb
+storage:
+  database:
+    type: filesystem
+provides:
+  db:
+    interface: roach
